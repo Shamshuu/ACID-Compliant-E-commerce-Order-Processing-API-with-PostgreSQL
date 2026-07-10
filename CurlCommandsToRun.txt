@@ -1,0 +1,31 @@
+docker-compose up --build -d
+
+curl -i -X GET http://localhost:8080/health
+
+
+curl -i -X GET http://localhost:8080/api/products
+
+
+curl -i -X POST http://localhost:8080/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1, "items": [{"productId": 1, "quantity": 2}]}'
+
+
+curl -i -X GET http://localhost:8080/api/products
+
+
+curl -i -X GET http://localhost:8080/api/orders/1
+
+
+curl -i -X POST http://localhost:8080/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1, "items": [{"productId": 3, "quantity": 1}]}'
+
+
+curl -i -X PUT http://localhost:8080/api/orders/1/cancel
+
+
+curl -i -X GET http://localhost:8080/api/products
+
+
+curl -i -X PUT http://localhost:8080/api/orders/1/cancel
