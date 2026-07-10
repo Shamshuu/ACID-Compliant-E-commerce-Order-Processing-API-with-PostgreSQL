@@ -1,0 +1,68 @@
+1. Project Purpose
+
+In high-traffic e-commerce systems, race conditions (such as two users buying the last item simultaneously) can lead to data inconsistencies like double-selling inventory or charging customers for failed orders.
+
+The purpose of this project is to implement a consistent, containerized, and ACID-compliant E-commerce Order API that ensures absolute data integrity. It guarantees that inventory levels are accurate, operations are safe from concurrent interference, and failures gracefully revert all modified states.
+
+2. Technical Stack: How Each Technology Helps
+
+PostgreSQL (Database): 
+Relational database that natively supports full ACID (Atomicity, Consistency, Isolation, Durability) transactions, row-level locking, and schema check constraints (e.g., checking that stock >= 0).
+
+Knex.js (SQL Query Builder & Migrations): 
+Builds clean SQL queries inside TypeScript, manages database connection pools, compiles database schema migrations, and facilitates transactions (trx.commit(), trx.rollback()) and pessimistic locking (.forUpdate()).
+
+TypeScript (Language): 
+Provides compile-time type safety. It ensures request schemas (like CreateOrderInput or OrderItemInput) are strictly typed, reducing runtime issues.
+
+Express.js (Web Framework): 
+Handles HTTP routing, middleware processing, validation error filtering, and global error handling.
+
+Docker & Docker Compose: 
+Containerizes both the database and application. Using Docker's depends_on with service_healthy conditions guarantees the database is fully initialized, migrated, and seeded before the application server begins accepting HTTP requests.
+
+Winston (Structured Logger): 
+Outputs logs in structured JSON format. This allows developers to monitor logs for database operations, transaction commits, rollbacks, and optimistic locking concurrency conflicts.
+
+3. Implementation of Key Functionalities
+
+A. Health Check (GET /health)
+How it is implemented: Inside app.ts, a light query SELECT 1 is run against PostgreSQL.
+
+Purpose: Allows external tools (like Docker's healthcheck) to verify that the app is connected to the database and ready to receive traffic.
+
+B. Product Catalog (GET /api/products)
+
+How it is implemented: Queries the products table using Knex in productController.ts.
+
+Purpose: Fetches up-to-date item prices and stock values, parsing PostgreSQL decimals into float numbers.
+
+C. Create Order (POST /api/orders) — Atomic Transaction & Optimistic Locking
+
+How it is implemented: Written inside orderService.ts:
+
+Opens a database transaction: const trx = await db.transaction().
+Verifies the user exists, and checks if there is sufficient stock for all requested items.
+Optimistic Locking:
+Products have a version column (starts at 0). When checking the stock, the system reads the product's current version.
+
+During the update, it executes:
+
+sql
+UPDATE products SET stock = :newStock, version = version + 1 
+WHERE id = :productId AND version = :currentVersion;
+
+If another concurrent order successfully completed first, the database version would have changed. This query will update 0 rows.
+The application detects affectedRows === 0, throws a concurrency exception, rolls back the entire transaction, and returns a 400 Bad Request suggesting the user retry.
+If version matching succeeds, it inserts the records into orders, order_items, and records a "succeeded" payment inside payments.
+Commits the transaction. If any error occurs during these steps, trx.rollback() is executed, ensuring no database modifications persist.
+
+D. Cancel Order (PUT /api/orders/:orderId/cancel) — Pessimistic locking & Idempotency
+
+How it is implemented: Written inside orderService.ts:
+
+Opens a transaction.
+Pessimistic Row Locking: Selects the order row with a lock (SELECT ... FOR UPDATE via .forUpdate()). If another thread is trying to cancel the same order simultaneously, it blocks and waits.
+Idempotency Check: If the locked order record has a status of "cancelled", the system commits the transaction without making any changes and returns success.
+If the order is active, its status is changed to "cancelled", and inventory is incremented back for each item in the order.
+Commits the transaction and releases the row lock.
