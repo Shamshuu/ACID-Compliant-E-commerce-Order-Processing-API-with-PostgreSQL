@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - API_PORT=${API_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:' + process.env.API_PORT + '/health').then(res => res.status === 200 ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/seeds:/docker-entrypoint-initdb.d # Mount seed scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
