@@ -1,0 +1,10 @@
+{
+  "testUser": {
+    "id": 1,
+    "email": "alice@example.com"
+  },
+  "testProducts": {
+    "inStockProductId": 1,
+    "outOfStockProductId": 3
+  }
+}
